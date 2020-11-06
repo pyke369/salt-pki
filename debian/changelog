@@ -1,0 +1,5 @@
+salt-pki (1.0.0) stable; urgency=medium
+
+  * initial release
+
+ -- Pierre-Yves Kerembellec <py.kerembellec@gmail.com>  Fri, 12 Jul 2019 16:17:43 +0200

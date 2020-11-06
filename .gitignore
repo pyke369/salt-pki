@@ -1,0 +1,6 @@
+salt-pki
+debian/salt-pki
+debian/*debhelper*
+debian/*substvars*
+debian/files
+_*
