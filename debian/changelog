@@ -1,3 +1,9 @@
+salt-pki (1.0.1) stable; urgency=medium
+
+  * fix potential crash condition
+
+ -- Pierre-Yves Kerembellec <py.kerembellec@gmail.com>  Wed, 18 Nov 2020 18:07:37 +0100
+
 salt-pki (1.0.0) stable; urgency=medium
 
   * initial release

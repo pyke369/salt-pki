@@ -23,7 +23,7 @@ import (
 
 const (
 	progname = "salt-pki"
-	version  = "1.0.0"
+	version  = "1.0.1"
 )
 
 type PEER struct {
@@ -57,7 +57,7 @@ func local() {
 	hasher := sha1.New()
 	for _, entry := range roots {
 		filepath.Walk(entry, func(path string, info os.FileInfo, err error) error {
-			if info.Mode().IsRegular() && !strings.Contains(path, "/.") {
+			if err == nil && info.Mode().IsRegular() && !strings.Contains(path, "/.") {
 				key := strings.TrimPrefix(path, root+"/")
 				if content, err := ioutil.ReadFile(path); err == nil && len(content) > 0 {
 					sum := fmt.Sprintf("%x", sha1.Sum(content))
