@@ -23,7 +23,7 @@ import (
 
 const (
 	progname = "salt-pki"
-	version  = "1.0.1"
+	version  = "1.0.2"
 )
 
 type PEER struct {
@@ -196,12 +196,13 @@ func synchronize() {
 								}
 							}
 							if ok {
-								if os.Remove(target) == nil {
-									lock.Lock()
-									delete(items, key)
-									lock.Unlock()
-									log.Info(map[string]interface{}{"id": id, "event": "remove", "peer": name, "item": key})
-								}
+								os.Remove(target)
+							}
+							if _, err := os.Stat(target); err != nil {
+								lock.Lock()
+								delete(items, key)
+								lock.Unlock()
+								log.Info(map[string]interface{}{"id": id, "event": "remove", "peer": name, "item": key})
 							}
 						}
 						if len(add) > 0 || len(remove) > 0 {
