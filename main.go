@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -23,13 +24,13 @@ import (
 
 const (
 	progname = "salt-pki"
-	version  = "1.0.2"
+	version  = "1.0.3"
 )
 
 type PEER struct {
 	hash  string
 	items int64
-	seen  time.Time
+	seen  int64
 }
 type ITEM struct {
 	Hash     string `json:"hash"`
@@ -93,7 +94,7 @@ func local() {
 }
 
 // poll peers states
-func peer(name, remote string) {
+func peer(name, remote string) int64 {
 	lock.Lock()
 	if peers[name] == nil {
 		peers[name] = &PEER{}
@@ -108,12 +109,18 @@ func peer(name, remote string) {
 				if err := json.Unmarshal(content, &payload); err == nil {
 					phash, pitems := jsonrpc.String(payload["hash"]), int64(jsonrpc.Number(payload["items"]))
 					if pid := jsonrpc.String(payload["id"]); pid == name {
-						peer.seen = time.Now()
-						if len(phash) == 40 && pitems > 0 {
-							if phash != peer.hash {
-								log.Info(map[string]interface{}{"id": id, "event": "peer", "peer": name, "hash": phash, "items": pitems})
+						if ptime := int(jsonrpc.Number(payload["time"])); ptime != 0 {
+							if dtime := int(math.Abs(float64(int(time.Now().UnixNano()/int64(time.Millisecond)) - ptime))); dtime <= 2000 {
+								peer.seen = time.Now().Unix()
+								if len(phash) == 40 {
+									if phash != peer.hash {
+										log.Info(map[string]interface{}{"id": id, "event": "peer", "peer": name, "hash": phash, "items": pitems})
+									}
+									peer.hash, peer.items = phash, pitems
+								}
+							} else {
+								log.Warn(map[string]interface{}{"id": id, "event": "peer", "peer": name, "error": fmt.Sprintf("peer ignored (clock delta %dms)", dtime)})
 							}
-							peer.hash, peer.items = phash, pitems
 						}
 					} else {
 						log.Warn(map[string]interface{}{"id": id, "event": "peer", "peer": name, "error": fmt.Sprintf("peer mismatch %s", pid)})
@@ -132,6 +139,7 @@ func peer(name, remote string) {
 	} else {
 		log.Warn(map[string]interface{}{"id": id, "event": "peer", "peer": name, "error": fmt.Sprintf("%v", err)})
 	}
+	return peer.seen
 }
 
 // synchronize items from peers
@@ -155,7 +163,7 @@ func synchronize() {
 							if items[pkey] == nil || (pitem.Hash != items[pkey].Hash && time.Now().Unix()-pitem.Seen < 10 && items[pkey].Modified < pitem.Modified) {
 								add[pkey] = pitem
 							}
-							if items[pkey] != nil && pitem.Hash == items[pkey].Hash && time.Now().Unix()-pitem.Seen > 10 {
+							if items[pkey] != nil && pitem.Hash == items[pkey].Hash && time.Now().Unix()-pitem.Seen >= 10 {
 								remove[pkey] = pitem
 							}
 						}
@@ -175,9 +183,14 @@ func synchronize() {
 										}
 										if ok {
 											os.MkdirAll(filepath.Dir(target), 0755)
-											if ioutil.WriteFile(target, content, 0644) == nil {
-												os.Chtimes(target, time.Unix(item.Modified, 0), time.Unix(item.Modified, 0))
-												log.Info(map[string]interface{}{"id": id, "event": "add", "peer": name, "item": key})
+											ttarget := fmt.Sprintf("%s/.%s", filepath.Dir(target), filepath.Base(target))
+											if ioutil.WriteFile(ttarget, content, 0644) == nil {
+												if os.Chtimes(ttarget, time.Unix(item.Modified-5, 0), time.Unix(item.Modified-5, 0)) == nil {
+													os.Remove(target)
+													if os.Rename(ttarget, target) == nil {
+														log.Info(map[string]interface{}{"id": id, "event": "add", "peer": name, "item": key})
+													}
+												}
 											}
 										}
 									}
@@ -238,7 +251,7 @@ func handler(response http.ResponseWriter, request *http.Request) {
 	switch request.URL.Path {
 	case "/_state":
 		lock.RLock()
-		content, _ = json.Marshal(map[string]interface{}{"id": id, "hash": hash, "items": len(items)})
+		content, _ = json.Marshal(map[string]interface{}{"id": id, "hash": hash, "items": len(items), "time": time.Now().UnixNano() / int64(time.Millisecond)})
 		lock.RUnlock()
 		response.Header().Set("Content-Type", "application/json")
 		response.Header().Set("Content-Length", fmt.Sprintf("%d", len(content)))
@@ -308,7 +321,10 @@ func main() {
 		for range time.Tick(7 * time.Second) {
 			for _, path := range config.GetPaths("peers") {
 				if name := strings.TrimPrefix(path, "peers/"); name != id {
-					peer(name, strings.TrimSuffix(config.GetString(path, ""), "/"))
+					seen := peer(name, strings.TrimSuffix(config.GetString(path, ""), "/"))
+					if elapsed := time.Now().Unix() - seen; seen != 0 && elapsed >= 60 {
+						log.Warn(map[string]interface{}{"id": id, "event": "peer", "peer": name, "error": fmt.Sprintf("peer not seen for the last %d seconds", elapsed)})
+					}
 				}
 			}
 		}

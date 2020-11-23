@@ -1,3 +1,9 @@
+salt-pki (1.0.3) stable; urgency=medium
+
+  * avoid synchronization oscillations
+
+ -- Pierre-Yves Kerembellec <py.kerembellec@gmail.com>  Mon, 23 Nov 2020 19:17:38 +0100
+
 salt-pki (1.0.2) stable; urgency=medium
 
   * fix item removal logging
