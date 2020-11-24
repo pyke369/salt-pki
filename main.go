@@ -24,7 +24,7 @@ import (
 
 const (
 	progname = "salt-pki"
-	version  = "1.0.4"
+	version  = "1.0.5"
 )
 
 type PEER struct {
@@ -82,7 +82,7 @@ func local() {
 	}
 	lock.Lock()
 	for key, item := range items {
-		if time.Now().Unix()-item.Seen >= 60 {
+		if time.Now().Unix()-item.Seen >= 180 {
 			delete(items, key)
 			modified = true
 		}
@@ -160,10 +160,11 @@ func synchronize() {
 						add, remove := map[string]*ITEM{}, map[string]*ITEM{}
 						lock.RLock()
 						for pkey, pitem := range payload {
-							if items[pkey] == nil || (pitem.Hash != items[pkey].Hash && time.Now().Unix()-pitem.Seen < 10 && items[pkey].Modified < pitem.Modified) {
+							if items[pkey] == nil || (pitem.Hash != items[pkey].Hash && time.Now().Unix()-pitem.Seen < 5 &&
+								time.Now().Unix()-pitem.Modified <= 120 && items[pkey].Modified < pitem.Modified) {
 								add[pkey] = pitem
 							}
-							if items[pkey] != nil && pitem.Hash == items[pkey].Hash && time.Now().Unix()-pitem.Seen >= 10 {
+							if items[pkey] != nil && pitem.Hash == items[pkey].Hash && time.Now().Unix()-pitem.Seen >= 7 {
 								remove[pkey] = pitem
 							}
 						}
@@ -213,7 +214,7 @@ func synchronize() {
 							}
 							if _, err := os.Stat(target); err != nil {
 								lock.Lock()
-								delete(items, key)
+								items[key].Seen = time.Now().Unix() - 10
 								lock.Unlock()
 								log.Info(map[string]interface{}{"id": id, "event": "remove", "peer": name, "item": key})
 							}
@@ -225,7 +226,6 @@ func synchronize() {
 				}
 				response.Body.Close()
 			}
-			break
 		}
 	}
 }
