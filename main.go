@@ -24,7 +24,7 @@ import (
 
 const (
 	progname = "salt-pki"
-	version  = "1.0.3"
+	version  = "1.0.4"
 )
 
 type PEER struct {
@@ -225,6 +225,7 @@ func synchronize() {
 				}
 				response.Body.Close()
 			}
+			break
 		}
 	}
 }
@@ -309,16 +310,9 @@ func main() {
 		}
 	}()
 
-	// synchronize items every 5 seconds
+	// poll peers states every 5 seconds
 	go func() {
 		for range time.Tick(5 * time.Second) {
-			synchronize()
-		}
-	}()
-
-	// poll peers states every 7 seconds
-	go func() {
-		for range time.Tick(7 * time.Second) {
 			for _, path := range config.GetPaths("peers") {
 				if name := strings.TrimPrefix(path, "peers/"); name != id {
 					seen := peer(name, strings.TrimSuffix(config.GetString(path, ""), "/"))
@@ -327,6 +321,13 @@ func main() {
 					}
 				}
 			}
+		}
+	}()
+
+	// synchronize items every 7 seconds
+	go func() {
+		for range time.Tick(7 * time.Second) {
+			synchronize()
 		}
 	}()
 
