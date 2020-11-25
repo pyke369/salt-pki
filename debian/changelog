@@ -1,3 +1,9 @@
+salt-pki (1.0.8) stable; urgency=medium
+
+  * do not synchronize outdated files
+
+ -- Pierre-Yves Kerembellec <py.kerembellec@gmail.com>  Wed, 25 Nov 2020 18:43:49 +0100
+
 salt-pki (1.0.7) stable; urgency=medium
 
   * use explicit flag for removes

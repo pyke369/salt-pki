@@ -24,7 +24,7 @@ import (
 
 const (
 	progname = "salt-pki"
-	version  = "1.0.7"
+	version  = "1.0.8"
 )
 
 type PEER struct {
@@ -169,8 +169,8 @@ func synchronize() {
 						add, remove := map[string]*ITEM{}, map[string]*ITEM{}
 						lock.RLock()
 						for pkey, pitem := range payload {
-							if items[pkey] == nil || (pitem.Hash != items[pkey].Hash && time.Now().Unix()-pitem.Seen < 8 &&
-								time.Now().Unix()-pitem.Modified <= 120 && items[pkey].Modified < pitem.Modified) {
+							if (items[pkey] == nil && time.Now().Unix()-pitem.Modified <= 120) ||
+								(pitem.Hash != items[pkey].Hash && time.Now().Unix()-pitem.Seen < 8 && items[pkey].Modified < pitem.Modified) {
 								add[pkey] = pitem
 							}
 							if items[pkey] != nil && pitem.Hash == items[pkey].Hash && pitem.Deleted {
