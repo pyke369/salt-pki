@@ -1,3 +1,9 @@
+salt-pki (1.0.7) stable; urgency=medium
+
+  * use explicit flag for removes
+
+ -- Pierre-Yves Kerembellec <py.kerembellec@gmail.com>  Wed, 25 Nov 2020 14:17:44 +0100
+
 salt-pki (1.0.6) stable; urgency=medium
 
   * remove unnecessary logging

@@ -24,7 +24,7 @@ import (
 
 const (
 	progname = "salt-pki"
-	version  = "1.0.6"
+	version  = "1.0.7"
 )
 
 type PEER struct {
@@ -36,6 +36,7 @@ type ITEM struct {
 	Hash     string `json:"hash"`
 	Modified int64  `json:"modified"`
 	Seen     int64  `json:"seen"`
+	Deleted  bool   `json:"deleted"`
 }
 
 var (
@@ -82,6 +83,11 @@ func local() {
 	}
 	lock.Lock()
 	for key, item := range items {
+		if time.Now().Unix()-item.Seen >= 30 {
+			if _, err := os.Stat(filepath.Join(root, key)); err != nil {
+				items[key].Deleted = true
+			}
+		}
 		if time.Now().Unix()-item.Seen >= 180 {
 			delete(items, key)
 			modified = true
@@ -147,10 +153,13 @@ func synchronize() {
 	lpeers := map[string]*PEER{}
 	lock.Lock()
 	for name, peer := range peers {
-		lpeers[name] = peer
+		if time.Now().Unix()-peer.seen <= 10 {
+			lpeers[name] = peer
+		}
 	}
 	lock.Unlock()
 	for name, peer := range lpeers {
+		modified := false
 		if peer.hash != hash {
 			client, remote := &http.Client{Timeout: 10 * time.Second, Transport: transport}, config.GetString("peers/"+name, "")
 			if response, err := client.Get(remote + "/_detail"); err == nil {
@@ -160,12 +169,12 @@ func synchronize() {
 						add, remove := map[string]*ITEM{}, map[string]*ITEM{}
 						lock.RLock()
 						for pkey, pitem := range payload {
-							if items[pkey] == nil || (pitem.Hash != items[pkey].Hash && time.Now().Unix()-pitem.Seen < 5 &&
+							if items[pkey] == nil || (pitem.Hash != items[pkey].Hash && time.Now().Unix()-pitem.Seen < 8 &&
 								time.Now().Unix()-pitem.Modified <= 120 && items[pkey].Modified < pitem.Modified) {
 								add[pkey] = pitem
 							}
-							if items[pkey] != nil && pitem.Hash == items[pkey].Hash && time.Now().Unix()-pitem.Seen >= 7 {
-								if _, err := os.Stat(root + "/" + pkey); err == nil {
+							if items[pkey] != nil && pitem.Hash == items[pkey].Hash && pitem.Deleted {
+								if _, err := os.Stat(filepath.Join(root, pkey)); err == nil {
 									remove[pkey] = pitem
 								}
 							}
@@ -175,7 +184,7 @@ func synchronize() {
 							if response, err := client.Get(remote + "/" + key); err == nil {
 								if content, err := ioutil.ReadAll(response.Body); err == nil && len(content) > 0 {
 									if fmt.Sprintf("%x", sha1.Sum(content)) == item.Hash {
-										target, ok := root+"/"+key, true
+										target, ok := filepath.Join(root, key), true
 										if _, err := os.Stat(target); err == nil && backup != "" {
 											ok = false
 											updated := fmt.Sprintf("%s/%s.updated.%d", backup, key, time.Now().UnixNano()/int64(time.Millisecond))
@@ -202,7 +211,7 @@ func synchronize() {
 							}
 						}
 						for key, _ := range remove {
-							target, ok := root+"/"+key, true
+							target, ok := filepath.Join(root, key), true
 							if _, err := os.Stat(target); err == nil && backup != "" {
 								ok = false
 								removed := fmt.Sprintf("%s/%s.removed.%d", backup, key, time.Now().UnixNano()/int64(time.Millisecond))
@@ -222,12 +231,16 @@ func synchronize() {
 							}
 						}
 						if len(add) > 0 || len(remove) > 0 {
+							modified = true
 							local()
 						}
 					}
 				}
 				response.Body.Close()
 			}
+		}
+		if modified {
+			break
 		}
 	}
 }
@@ -318,7 +331,7 @@ func main() {
 			for _, path := range config.GetPaths("peers") {
 				if name := strings.TrimPrefix(path, "peers/"); name != id {
 					seen := peer(name, strings.TrimSuffix(config.GetString(path, ""), "/"))
-					if elapsed := time.Now().Unix() - seen; seen != 0 && elapsed >= 60 {
+					if elapsed := time.Now().Unix() - seen; seen != 0 && elapsed >= 30 {
 						log.Warn(map[string]interface{}{"id": id, "event": "peer", "peer": name, "error": fmt.Sprintf("peer not seen for the last %d seconds", elapsed)})
 					}
 				}
