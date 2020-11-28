@@ -1,3 +1,9 @@
+salt-pki (1.0.9) stable; urgency=medium
+
+  * fix potential crash condition
+
+ -- Pierre-Yves Kerembellec <py.kerembellec@gmail.com>  Sat, 28 Nov 2020 09:41:04 +0100
+
 salt-pki (1.0.8) stable; urgency=medium
 
   * do not synchronize outdated files
